@@ -2,7 +2,11 @@
 title: Felsennelkenlexikon
 ---
 
-ACHTUNG! Dieses Lexikon wurde unter dem exzessiven Einfluss von Alkohol, Spezi, Realsatire der MVG und anderem Unsinn verfasst. Teile seines Inhalts können erfunden, überspitzt, böswillig fehlinterpretiert sein oder in der Zukunft liegen.
+Die münchnerische Ergänzung zum legendären [[Lexikon der RNLF]]. Befindet sich noch im Aufbau. Verlinken ausdrücklich erwünscht.
+
+> [!warning] ACHTUNG!
+>
+> Dieses Lexikon wurde unter dem exzessiven Einfluss von Alkohol, Spezi, Realsatire der MVG und anderem Unsinn verfasst. Teile seines Inhalts können erfunden, überspitzt, böswillig fehlinterpretiert sein oder in der Zukunft liegen.
 
 ## Welche Nebenwirkungen hat das Felsennelkenlexikon?
 
