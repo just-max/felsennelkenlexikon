@@ -151,11 +151,14 @@ class HTMLStructureParser(HTMLParser):
 
 # Part 2: Parsing Trees
 
+
 ## Parsing Nodes
+
 
 class P[A, T](metaclass=ABCMeta):
     def parse(self, x: A) -> Optional[T]:
         ...
+
 
 class ElementNodeP[T](P[Node, T]):
     def __init__(self, content: P[list[Node], T], tag: str = None, attrs: dict[str, Optional[str]] = ()):
@@ -170,6 +173,7 @@ class ElementNodeP[T](P[Node, T]):
             if k not in el.attrs: return None
             if v != el.attrs[k]: return None
         return self._content.parse(el.children)
+
 
 class ElementDescendP[T](P[Node, list[T]]):
     def __init__(self, until: P[Node, T]):
@@ -188,6 +192,7 @@ class ElementDescendP[T](P[Node, list[T]]):
         dfs(element)
         return found
 
+
 class TextNodeP[T](P[Node, T]):
     def __init__(self, content: P[str, T]):
         self._content = content
@@ -195,11 +200,14 @@ class TextNodeP[T](P[Node, T]):
         if not isinstance(el, TextNode): return None
         return self._content.parse(el.text)
 
+
 ## Parsing Combinators
+
 
 class IdentityP[A](P[A, A]):
     def parse(self, x: A) -> Optional[A]:
         return x
+
 
 class MapP[A, T1, T2](P[A, T2]):
     def __init__(self, base: P[A, T1], f: Callable[[T1], Optional[T2]]):
@@ -210,7 +218,10 @@ class MapP[A, T1, T2](P[A, T2]):
         if r is None: return None
         return self._f(r)
 
+
 pure_parser = lambda x: MapP(IdentityP(), lambda _: x)
+fail_parser = pure_parser(None)
+
 
 class Lift2P[A, T1, T2, T](P[A, T]):
     def __init__(self, base1: P[A, T1], base2: P[A, T2], f: Callable[[T1, T2], Optional[T]]):
@@ -224,6 +235,10 @@ class Lift2P[A, T1, T2, T](P[A, T]):
         if r2 is None: return None
         return self._f(r1, r2)
 
+
+const_parser = lambda base, x: MapP(base, lambda _: x)
+
+
 class AnyP[A, T](P[A, T]):
     def __init__(self, *base: [A, T]):
         self._bases = base
@@ -233,59 +248,67 @@ class AnyP[A, T](P[A, T]):
             if r is not None:
                 return r
 
+
 class ConditionalP[A, T](P[A, T]):
     def __init__(self, base: P[A, T], p: Callable[[T], bool]):
         self._parser = MapP(base, lambda x: x if p(x) else None)
     def parse(self, x: A) -> Optional[A]:
         return self._parser.parse(x)
 
+
 ## Parsing Lists/Tuples
 
+
 class ListRepeatP[A, T](P[list[A], list[T]]):
-    def __init__(self, item: P[A, T]):
+    def __init__(self, item: P[A, T], ignoring=fail_parser):
         self._item = item
+        self._ignoring = ignoring
 
     def parse(self, items: list[A]) -> Optional[list[T]]:
         result = []
         for item in items:
+            r_ign = self._ignoring.parse(item)
+            if r_ign is not None: continue
             r = self._item.parse(item)
-            if r is None:
-                return None
+            if r is None: return None
             result.append(r)
         return result
 
+
 class TupleP[A, T](P[list[A], list[T]]):
-    def __init__(self, *p: list[P[A, T]], skip=False):
-        self._skip = skip
+    def __init__(self, *p: list[P[A, T]], ignoring=fail_parser):
+        self._ignoring = ignoring
         self._ps = p
+
     def parse(self, xs: list[A]) -> Optional[list[T]]:
         xs_iter = iter(xs)
         result = []
         for p in self._ps:
             for x in xs_iter:
+                r_ign = self._ignoring.parse(x)
+                if r_ign is not None: continue
                 r = p.parse(x)
-                if r is None:
-                    if self._skip: continue
-                    else: return None
+                if r is None: return None
                 result.append(r)
                 break
             # if we've exhausted the loop (no break), then nothing parsed for p
             else:
                 return None
-        # if not skipping, fail if anything is left of xs
-        if not self._skip:
-            for _ in xs_iter:
-                return None
+        # fail if anything left of xs can't be ignored
+        for x in xs_iter:
+            if self._ignoring.parse(x) is None: return None
         return result
 
+
 ## Misc. helpers
+
 
 concat_parser = lambda base: MapP(base=base, f=lambda xss: [x for xs in xss for x in xs])
 str_concat_parser = lambda base: MapP(base=base, f="".join)
 
-singleton_parser = lambda base, skip=False: MapP(
+singleton_parser = lambda base, ignoring=fail_parser: MapP(
+    base=TupleP(base, ignoring=ignoring),
     f=lambda xs: xs[0],
-    base=TupleP(base, skip=skip),
 )
 
 
@@ -301,12 +324,12 @@ textish_node_parser = AnyP(
     ),
 )
 
-textish_nodes_parser = str_concat_parser(ListRepeatP(textish_node_parser))
+textish_parser = str_concat_parser(ListRepeatP(textish_node_parser))
 
 link_parser = Lift2P(
     base1=ElementNodeP(
         tag="a",
-        content=textish_nodes_parser,
+        content=textish_parser,
     ),
     base2=MapP(IdentityP(), f=lambda node: node.attrs.get("href", None)),
     f=lambda text, target: {
@@ -322,6 +345,7 @@ linky_text_parser = ListRepeatP(
     )
 )
 
+
 ## Now defining parsers is easy ;)
 
 def main():
@@ -335,14 +359,7 @@ def main():
             # json.dump(doc.json(), sys.stdout, indent=2)
             print(doc.html(), file=out_file)
 
-    # def fail(msg):
-    #     raise ValueError(msg)
-
-    # expect_parser = lambda base, msg="failed": EitherP(
-    #     base1=base,
-    #     base2=MapP(IdentityP(), f=lambda _: fail(msg))
-    # )
-
+    # label: word, article, anchor
     def_label_parser = Lift2P(
         base1=link_parser,
         base2=MapP(IdentityP(), f=lambda node: node.attrs.get("id", None)),
@@ -353,6 +370,40 @@ def main():
         }
     )
 
+    # a single numbered sub-definition
+    multi_def_parser1 = ElementNodeP(
+        tag="tr",
+        content=MapP(
+            TupleP(
+                ElementNodeP(tag="td", content=IdentityP()),
+                ElementNodeP(
+                    tag="td",
+                    content=linky_text_parser,
+                ),
+                ignoring=textish_node_parser,
+            ),
+            f=lambda t: t[1],
+        ),
+    )
+
+    # table of numbered sub-definitions
+    multi_def_parser = singleton_parser(
+        ElementNodeP(
+            tag="table",
+            content=ListRepeatP(
+                multi_def_parser1,
+                ignoring=textish_node_parser,
+            ),
+        ),
+        ignoring=textish_node_parser,
+    )
+
+    def_body_parser = AnyP(
+        MapP(linky_text_parser, f=lambda d: {"kind": "single", "definition": d}),
+        MapP(multi_def_parser, f=lambda d: {"kind": "list", "definitions": d}),
+    )
+
+    # full definition
     def1_parser = ElementNodeP(
         tag="tr",
         content=MapP(
@@ -361,76 +412,25 @@ def main():
                 ElementNodeP(
                     tag="td",
                     attrs={"valign": "top"},
-                    content=singleton_parser(def_label_parser, skip=True)
+                    content=singleton_parser(
+                        def_label_parser,
+                        ignoring=textish_node_parser
+                    ),
                 ),
                 ElementNodeP(
                     tag="td",
                     attrs={"valign": "top"},
-                    content=AnyP(
-                        MapP(linky_text_parser, f=lambda d: {"failed": False, "def": d}),
-                        MapP(base=IdentityP(), f=lambda d: {"failed": True, "defstr": str(d), "def": [dd.json() for dd in d]})
-                        # IdentityP(),
-                        # pure_parser({})
-                    )
-                    # MapP(base=IdentityP(), f=lambda _: ()),
+                    content=def_body_parser,
                 ),
-                skip=True,
+                ignoring=textish_node_parser,
             )
         )
     )
 
     def_parser = concat_parser(base=ListRepeatP(ElementDescendP(def1_parser)))
-
-    # print(html_parser.children)
-    defs = def_parser.parse(html_parser.children)
-    json.dump(defs, sys.stdout)
-    print(len(defs), file=sys.stderr)
-    # 445
-    
-    # defs = DefinitionParser().parse_top_level(html_parser.children)
-    # print(list(defs))
+    defintions = def_parser.parse(html_parser.children)
+    json.dump(defintions, sys.stdout)
 
 
 if __name__ == "__main__":
     main()
-
-
-        # base1=ElementNodeP(
-        #     tag="a",
-        #     content=singleton_parser(TextNodeP(content=IdentityP())),
-        # ),
-        # base2=IdentityP(),
-        # f=lambda lbl, a_node: {
-        #     "title": lbl,
-        #     "href": a_node.attrs.get("href", None),
-        #     "id": a_node.attrs.get("id", None),
-        # }
-        
-# class DefinitionParser:
-
-#     @classmethod
-#     def alt(cls, x, *p):
-#         pass
-
-#     def parse_def_tr(self, element: Node):
-
-#         match element:
-#             case ElementNode(tag="tr"):
-#                 pass
-        
-#         return None
-
-#     def parse_top_level1(self, element: Node):
-#         def1 = self.parse_def_tr(element)
-#         if def1 is not None:
-#             yield def1
-#         else:
-#             match element:
-#                 case ElementNode():
-#                     yield from self.parse_top_level(element.children)
-#                 case TextNode():
-#                     yield from ()
-
-#     def parse_top_level(self, elements: list[Node]):
-#         for el in elements:
-#             yield from self.parse_top_level1(el)
