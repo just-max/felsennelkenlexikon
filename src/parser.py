@@ -7,11 +7,10 @@ from abc import ABCMeta
 
 import json
 import re
-
+from pathlib import Path
 from html.parser import HTMLParser
-from html.entities import name2codepoint
 
-from html.entities import entitydefs
+from argparse import ArgumentParser, FileType
 
 from typing import Callable, Optional, Tuple
 
@@ -25,6 +24,10 @@ def string2html(s):
             else:
                 yield f"&#{ord(c)};"
     return "".join(gen())
+
+
+def warn(*args, **kwargs):
+    print("[WARN]", *args, **kwargs, file=sys.stderr)
 
 
 # Part 1: Building Trees
@@ -90,6 +93,7 @@ class HTMLStructureParser(HTMLParser):
         self.children = []
 
     def _path(self, extras=()):
+        # TODO: make this less messy
         st = self.stack + [(self.element, self.children[:-1])] + list(extras)
         def pos(chs):
             return 1 + len([c for c in chs if not isinstance(c, TextNode)])
@@ -117,6 +121,10 @@ class HTMLStructureParser(HTMLParser):
 
             # ignore stray </a> and </tr>, this isn't really nice but it works
             if tag in ("a", "tr") and tag != self.element.tag:
+                warn(
+                    f"pos={self.getpos()[0]}:{self.getpos()[1]} path={self._path()}",
+                    f"ignored stray {tag!r} tag",
+                )
                 break
 
             self.element.children = self.children
@@ -132,10 +140,9 @@ class HTMLStructureParser(HTMLParser):
             ):
                 break
 
-            print(
-                f"[WARN] @({self._path(extras=[(el, [])])}, {self.getpos()}): "
+            warn(
+                f"pos={self.getpos()[0]}:{self.getpos()[1]} path={self._path(extras=[(el, [])])}",
                 f"tag {el.tag!r} not closed, got {tag!r} instead",
-                file=sys.stderr
             )
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, Optional[str]]]):
@@ -348,17 +355,9 @@ linky_text_parser = ListRepeatP(
 
 ## Now defining parsers is easy ;)
 
-def main():
-    html_parser = HTMLStructureParser()
-    with open(sys.argv[1], "r") as html_file:
-        for chunk in iter(lambda: html_file.read(4096), ""):
-            html_parser.feed(chunk)
-
-    with open(sys.argv[2], "w") as out_file:
-        for doc in html_parser.children:
-            # json.dump(doc.json(), sys.stdout, indent=2)
-            print(doc.html(), file=out_file)
-
+def definitions_parser():
+    """Put this in a function to keep things tidy"""
+    
     # label: word, article, anchor
     def_label_parser = Lift2P(
         base1=link_parser,
@@ -427,10 +426,126 @@ def main():
         )
     )
 
-    def_parser = concat_parser(base=ListRepeatP(ElementDescendP(def1_parser)))
-    defintions = def_parser.parse(html_parser.children)
-    json.dump(defintions, sys.stdout)
+    return concat_parser(base=ListRepeatP(ElementDescendP(def1_parser)))
 
+
+def write_definitions(defs, out_dir):
+    out_dir = Path(out_dir)
+
+    link_prefix = "\u2794\u202f"  # right arrow and narrow no-break space
+
+    def make_display_title(text):
+        return text.removesuffix(":")
+
+    def make_file_title(text):
+        # TODO: probably more
+        return (
+            make_display_title(text)
+                .replace(" ", "-")
+                .replace("[", "")
+                .replace("]", "")
+        )
+
+    lookup = {}
+    for d in defs:
+        target, did, title = d["meta"]["target"], d["meta"]["id"], d["meta"]["title"]
+        if target != "#" + did:
+            warn(
+                f"in definition of {title!r}: "
+                f"target={target!r} and id={did!r} don't match, using id"
+            )
+        if did in lookup:
+            warn(f"duplicate definition for id {did!r}")
+        lookup[did] = {
+            "file-title": make_file_title(title)
+        }
+
+    # TODO: deal with dead links! see stderr output
+    dead_links = []
+
+    def unlinky_text(text):
+        def unlinky1(t):
+            if isinstance(t, str):
+                return t
+            else:
+                txt, tgt = t["text"], t["target"]
+                # TODO: don't warn on external links
+                if not txt.startswith(link_prefix):
+                    warn(f"link text {txt!r} doesn't start with prefix {link_prefix!r}")
+                if not tgt.startswith("#"):
+                    warn(f"link target {tgt!r} doesn't start with prefix '#'")
+                txt, tgt = txt.removeprefix(link_prefix), tgt.removeprefix("#")
+                if tgt not in lookup:
+                    warn(f"dead link {txt!r} to {tgt!r}")
+                    dead_links.append((tgt, text))
+                    # TODO: handle dead links nicely
+                    return f"[[{tgt} | {txt}]]"
+                return f"[[{lookup[tgt]['file-title']} | {txt}]]"
+        return "".join(map(unlinky1, text))
+
+    for d in defs:
+        did, title = d["meta"]["id"], d["meta"]["title"]
+        with (
+            (out_dir / make_file_title(title))
+                .with_suffix(".md").open("w") as def_file
+        ):
+            def_file.write(
+                f"""---\n"""
+                f"""title: {make_display_title(title)}\n"""
+                f"""permalink: {did}\n"""
+                f"""---\n"""
+            )
+            # TODO: display title should be valid YAML string, might need quotes
+
+            match d["definition"]["kind"]:
+                case "single":
+                    def_text = d["definition"]["definition"]
+                    def_file.write(unlinky_text(def_text).strip())
+                    def_file.write("\n")
+                case "list":
+                    for n, subdef in enumerate(d["definition"]["definitions"], start=1):
+                        def_file.write("\n")
+                        def_file.write(f"{n}. ")
+                        def_file.write(unlinky_text(subdef).strip())
+                        def_file.write("\n")
+                        # TODO: check for line breaks and other things that could break the markdown
+
+
+def main(argv):
+    argument_parser = ArgumentParser(prog=argv[0])
+    argument_parser.add_argument("--output-parsed-html", type=Path, help="for debugging")
+    argument_parser.add_argument("--output-parsed-jsonl", type=Path, help="for debugging")
+    argument_parser.add_argument("--output-parsed-definitions", type=Path, help="for debugging")
+    argument_parser.add_argument(
+        "--input-html", type=FileType("r"),
+        default="-", help="where to read Lexikon HTML"
+    )
+    argument_parser.add_argument(
+        "output_dir", type=Path,
+        help="base directory for outputting Lexikon markdown"
+    )
+    parsed_args = argument_parser.parse_args(argv[1:])
+
+    html_parser = HTMLStructureParser()
+    for chunk in iter(lambda: parsed_args.input_html.read(4096), ""):
+        html_parser.feed(chunk)
+
+    if parsed_args.output_parsed_html is not None:
+        with parsed_args.output_parsed_html.open("w") as html_out:
+            for doc in html_parser.children:
+                print(doc.html(), file=html_out)
+    if parsed_args.output_parsed_jsonl is not None:
+        with parsed_args.output_parsed_jsonl.open("w") as jsonl_out:
+            for doc in html_parser.children:
+                json.dump(doc.json(), jsonl_out, indent=2)
+
+    defintions = definitions_parser().parse(html_parser.children)
+
+    if parsed_args.output_parsed_definitions is not None:
+        with parsed_args.output_parsed_definitions.open("w") as defs_out:
+            json.dump(defintions, defs_out, indent=2)
+
+    write_definitions(defintions, parsed_args.output_dir)
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
