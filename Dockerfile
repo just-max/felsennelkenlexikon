@@ -6,10 +6,18 @@ WORKDIR /usr/src/app/
 RUN git clone --depth 1 --branch ${QUARTZ_VERSION} \
     -- "https://github.com/jackyzha0/quartz.git" ./
 
+
+FROM docker.io/node:20-slim
+COPY --from=builder /usr/src/app/ /usr/src/app/
+WORKDIR /usr/src/app/
 RUN rm -r ./content/
-COPY ./quartz/ ./
+
+## if package.json or package-lock.json are to be overriden
+## in ./quartz/, they must be copied before running `npm ci`
+# COPY ./quartz/package.json ./quartz/package-lock.json .
 RUN npm ci
 
+COPY ./quartz/ ./
 COPY ./content/ ./content/
 
 CMD ["npx", "quartz", "build", "--serve"]
