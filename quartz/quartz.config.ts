@@ -8,11 +8,11 @@ import * as Plugin from "./quartz/plugins"
  */
 const config: QuartzConfig = {
   configuration: {
-    pageTitle: "Felsennelkenlexikon",
+    pageTitle: "Felsen\u{00AD}nelken\u{00AD}lexikon",
     enableSPA: true,
     enablePopovers: true,
     analytics: "null",
-    locale: "en-US",
+    locale: "de-DE",
     baseUrl: "justmax.github.io/felsennelkenlexikon",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "created",
