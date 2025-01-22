@@ -3,7 +3,6 @@
 set -e
 
 # TODO: allow overriding
-# TODO: rename Dockerfile to Containerfile or something
 
 SRC_DIR="src/"
 BUILD_DIR="build/"
