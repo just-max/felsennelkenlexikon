@@ -9,7 +9,6 @@ import * as Plugin from "./quartz/plugins"
 const config: QuartzConfig = {
   configuration: {
     pageTitle: "Felsennelkenlexikon",
-    pageTitleSuffix: "",
     enableSPA: true,
     enablePopovers: true,
     analytics: "null",
@@ -17,7 +16,6 @@ const config: QuartzConfig = {
     baseUrl: "justmax.github.io/felsennelkenlexikon",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "created",
-    generateSocialImages: false,
     theme: {
       fontOrigin: "googleFonts",
       cdnCaching: false,
