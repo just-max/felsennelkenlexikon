@@ -3,35 +3,30 @@
 set -e
 
 # TODO: allow overriding
-# rename Dockerfile to Containerfile or something
+# TODO: rename Dockerfile to Containerfile or something
 
 SRC_DIR="src/"
-CONTENT_INPUT="$SRC_DIR"/content/
-
 BUILD_DIR="build/"
-CONTENT_DIR="$BUILD_DIR"/content/
-DEFINITIONS_DIR="$BUILD_DIR"/definitions/
 
 CONTAINER_TAG="localhost/fnl-quartz:latest"
 
 CONTAINER_CMD=podman
 
 content_build() {
-    mkdir -p "$CONTENT_DIR" "$DEFINITIONS_DIR"
-    cp -rT "$CONTENT_INPUT" "$CONTENT_DIR"
+    local definitions_dir="$BUILD_DIR"/definitions/
+    mkdir -p "$BUILD_DIR"/content/ "$definitions_dir"
+    cp -rT "$SRC_DIR"/content/ "$BUILD_DIR"/content/
     python "$SRC_DIR"/parser.py \
         --input-html "$SRC_DIR"/lexikon.html \
-        --output-parsed-html "$DEFINITIONS_DIR"/lexikon-cleaned.html \
-        --output-parsed-jsonl "$DEFINITIONS_DIR"/lexikon-cleaned.jsonl \
-        --output-parsed-definitions "$DEFINITIONS_DIR"/lexikon-defs.json \
+        --output-parsed-html "$definitions_dir"/lexikon-cleaned.html \
+        --output-parsed-jsonl "$definitions_dir"/lexikon-cleaned.jsonl \
+        --output-parsed-definitions "$definitions_dir"/lexikon-defs.json \
         "$BUILD_DIR"/content/
 }
 
 container_build() {
-    content_build
-
     # TODO: move context to build directory
-    "$CONTAINER_CMD" build . --tag "$CONTAINER_TAG" "$BUILD_DIR"
+    "$CONTAINER_CMD" build . --tag "$CONTAINER_TAG"
 }
 
 container_run() {
@@ -43,7 +38,7 @@ container_run() {
 }
 
 lexikon_fetch() {
-    curl -o "$LEXIKON_INPUT" \
+    curl -o "$SRC_DIR"/lexikon.html \
         'https://web.archive.org/web/20161021102523/http://felsennelkenanger.de/lexikon/'
 }
 
