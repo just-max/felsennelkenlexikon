@@ -12,7 +12,8 @@ export const sharedPageComponents: SharedLayout = {
 // components for pages that display a single page (e.g. a single note)
 export const defaultContentPageLayout: PageLayout = {
   beforeBody: [
-    Component.Breadcrumbs(),
+    // breadcrumbs are useless if we don't have nesting
+    // Component.Breadcrumbs(),
     Component.ArticleTitle(),
     // remove ContentMeta: we don't need publish date or reading time
     // Component.ContentMeta(),
