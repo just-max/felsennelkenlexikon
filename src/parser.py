@@ -487,7 +487,7 @@ def write_definitions(defs, out_dir, overrides=()):
                     warn(f"in {ctxt!r}: dead link {txt!r} to {tgt!r}")
                     dead_links.append((tgt, text))
                     # TODO: handle dead links nicely
-                    return f"[[{tgt} | {txt}]]"
+                    return f"**{txt}**"
                 return f"[[{lookup[tgt]['file-title']} | {txt}]]"
         return "".join(map(unlinky1, text))
 
