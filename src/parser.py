@@ -185,7 +185,7 @@ class ElementNodeP[T](P[Node, T]):
 class ElementDescendP[T](P[Node, list[T]]):
     def __init__(self, until: P[Node, T]):
         self._until = until
-    
+
     def parse(self, element: Node) -> Optional[list[T]]:
         found = []
         def dfs(el):
@@ -357,7 +357,7 @@ linky_text_parser = ListRepeatP(
 
 def definitions_parser():
     """Put this in a function to keep things tidy"""
-    
+
     # label: word, article, anchor
     def_label_parser = Lift2P(
         base1=link_parser,
@@ -429,8 +429,14 @@ def definitions_parser():
     return concat_parser(base=ListRepeatP(ElementDescendP(def1_parser)))
 
 
-def write_definitions(defs, out_dir):
+# overrides, to redirect the target of missing links
+definition_id_overrides = {
+    "ao": "alkopop",
+}
+
+def write_definitions(defs, out_dir, overrides=()):
     out_dir = Path(out_dir)
+    overrides = dict(overrides)
 
     link_prefix = "\u2794\u202f"  # right arrow and narrow no-break space
 
@@ -448,7 +454,8 @@ def write_definitions(defs, out_dir):
 
     lookup = {}
     for d in defs:
-        target, did, title = d["meta"]["target"], d["meta"]["id"], d["meta"]["title"]
+        meta = d["meta"]
+        target, did, title = meta["target"], meta["id"], meta["title"]
         if target != "#" + did:
             warn(
                 f"in definition of {title!r}: "
@@ -463,7 +470,7 @@ def write_definitions(defs, out_dir):
     # TODO: deal with dead links! see stderr output
     dead_links = []
 
-    def unlinky_text(text):
+    def unlinky_text(text, ctxt):
         def unlinky1(t):
             if isinstance(t, str):
                 return t
@@ -475,8 +482,9 @@ def write_definitions(defs, out_dir):
                 if not tgt.startswith("#"):
                     warn(f"link target {tgt!r} doesn't start with prefix '#'")
                 txt, tgt = txt.removeprefix(link_prefix), tgt.removeprefix("#")
+                tgt = overrides.get(tgt, tgt)
                 if tgt not in lookup:
-                    warn(f"dead link {txt!r} to {tgt!r}")
+                    warn(f"in {ctxt!r}: dead link {txt!r} to {tgt!r}")
                     dead_links.append((tgt, text))
                     # TODO: handle dead links nicely
                     return f"[[{tgt} | {txt}]]"
@@ -484,29 +492,29 @@ def write_definitions(defs, out_dir):
         return "".join(map(unlinky1, text))
 
     for d in defs:
-        did, title = d["meta"]["id"], d["meta"]["title"]
+        did, title = d["meta"]["id"], make_display_title(d["meta"]["title"])
         with (
             (out_dir / make_file_title(title))
                 .with_suffix(".md").open("w") as def_file
         ):
             def_file.write(
                 f"""---\n"""
-                f"""title: {make_display_title(title)}\n"""
+                # use json.dumps to ensure titles are valid JSON (and thus YAML)
+                f"""title: {json.dumps(title)}\n"""
                 f"""permalink: {did}\n"""
                 f"""---\n"""
             )
-            # TODO: display title should be valid YAML string, might need quotes
 
             match d["definition"]["kind"]:
                 case "single":
                     def_text = d["definition"]["definition"]
-                    def_file.write(unlinky_text(def_text).strip())
+                    def_file.write(unlinky_text(def_text, title).strip())
                     def_file.write("\n")
                 case "list":
                     for n, subdef in enumerate(d["definition"]["definitions"], start=1):
                         def_file.write("\n")
                         def_file.write(f"{n}. ")
-                        def_file.write(unlinky_text(subdef).strip())
+                        def_file.write(unlinky_text(subdef, title).strip())
                         def_file.write("\n")
                         # TODO: check for line breaks and other things that could break the markdown
 
@@ -545,7 +553,7 @@ def main(argv):
         with parsed_args.output_parsed_definitions.open("w") as defs_out:
             json.dump(defintions, defs_out, indent=2)
 
-    write_definitions(defintions, parsed_args.output_dir)
+    write_definitions(defintions, parsed_args.output_dir, definition_id_overrides)
 
 if __name__ == "__main__":
     main(sys.argv)
