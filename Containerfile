@@ -19,4 +19,4 @@ RUN npm ci
 
 COPY ./quartz/ ./
 
-CMD ["npx", "quartz", "build", "--serve"]
+CMD ["npx", "quartz", "build"]
