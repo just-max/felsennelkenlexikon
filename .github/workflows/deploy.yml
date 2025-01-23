@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          version: 3.13.1
+          python-version: 3.13.1
       - name: Build content
         run: ./run.sh content_build
       - name: Upload built files
