@@ -65,7 +65,7 @@ jobs:
           path: public/
 
   deploy:
-    needs: build
+    needs: build-page
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
