@@ -3,7 +3,7 @@ name: Deploy Quartz site to GitHub Pages
 on:
   push:
     branches:
-      - v4
+      - main
 
 permissions:
   contents: read
@@ -19,19 +19,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - run: ./run.sh container_build
+      - run: ./run.sh content_build
+      - run: ./run.sh container_run
+      - uses: actions/upload-pages-artifact@v3
         with:
-          fetch-depth: 0 # Fetch all history for git info
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install Dependencies
-        run: npm ci
-      - name: Build Quartz
-        run: npx quartz build
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
+          path: build/public/
 
   deploy:
     needs: build
