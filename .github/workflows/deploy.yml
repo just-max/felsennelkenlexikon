@@ -15,16 +15,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-content:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - run: ./run.sh container_build
-      - run: ./run.sh content_build
-      - run: ./run.sh container_run
+      - name: Check out the Lexikon
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          version: 3.13.1
+      - name: Build content
+        run: ./run.sh content_build
+      - name: Upload built files
+        uses: actions/upload-artifact@v4
+        with:
+          name: content
+          path: build/content/
+      - name: Upload quartz overrides
+        uses: actions/upload-artifact@v4
+        with:
+          name: quartz
+          path: quartz/
+
+  build-page:
+    needs: build-content
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out Quartz
+        uses: actions/checkout@v4
+        with:
+          repository: 'jackyzha0/quartz'
+          ref: v4.4.0
+      - name: Download Quartz overrides
+        uses: actions/download-artifact@v4
+        with:
+          name: quartz
+          path: ./
+      - name: Install Dependencies
+        run: npm ci
+      - name: Download built files
+        uses: actions/download-artifact@v4
+        with:
+          name: content
+          path: content/
+      - name: Build Quartz
+        run: npx quartz build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/public/
+          path: public/
 
   deploy:
     needs: build
