@@ -6,7 +6,11 @@ export const sharedPageComponents: SharedLayout = {
   head: Component.Head(),
   header: [],
   afterBody: [],
-  footer: Component.Footer({}),
+  footer: Component.Footer({
+    links: {
+      "Auf GitHub beitragen": "https://github.com/just-max/felsennelkenlexikon"
+    }
+  }),
 }
 
 // components for pages that display a single page (e.g. a single note)
