@@ -13,7 +13,7 @@ const config: QuartzConfig = {
     enablePopovers: true,
     analytics: "null",
     locale: "de-DE",
-    baseUrl: "justmax.github.io/felsennelkenlexikon",
+    baseUrl: "fnlexikon.de",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "created",
     theme: {
